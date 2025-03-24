@@ -1,0 +1,66 @@
+name: Documentation
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+      - '**.py'  # Rebuild on Python file changes for API docs
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
+
+      - name: Build documentation
+        run: mkdocs build
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: mkdocs gh-deploy --force
+
+      - name: Generate Wiki Content
+        run: |
+          cp -r site/* wiki/
+          cd wiki
+          
+          # Convert links to wiki format
+          find . -name "*.html" -exec sh -c '
+            for file do
+              # Convert internal links
+              sed -i "s|href=\"/|href=\"https://github.com/${{ github.repository }}/wiki/|g" "$file"
+              # Convert asset links
+              sed -i "s|src=\"/|src=\"https://github.com/${{ github.repository }}/wiki/|g" "$file"
+            done
+          ' sh {} +
+
+      - name: Push to Wiki
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: Andrew-Chen-Wang/github-wiki-action@v3
+        with:
+          path: wiki
+          commit-message: "docs: update wiki from MkDocs build" 
