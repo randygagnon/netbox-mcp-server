@@ -3,6 +3,7 @@ from netbox_client import NetBoxRestClient
 import os
 import requests
 import json
+from typing import Optional, List, Dict, Any
 
 # Mapping of simple object names to API endpoints
 NETBOX_OBJECT_TYPES = {
@@ -90,6 +91,36 @@ NETBOX_OBJECT_TYPES = {
 
 mcp = FastMCP("NetBox", log_level="DEBUG")
 netbox = None
+# Default branch to use (can be set via environment variable)
+DEFAULT_BRANCH = os.environ.get("NETBOX_BRANCH")
+
+def init_client():
+    """Initialize the NetBox client with configuration from environment variables."""
+    global netbox
+    
+    netbox_url = os.environ.get("NETBOX_URL")
+    netbox_token = os.environ.get("NETBOX_TOKEN")
+    
+    # SSL verification can be disabled for testing
+    verify_ssl = os.environ.get("NETBOX_VERIFY_SSL", "true").lower() in ("true", "1", "yes")
+    
+    if not netbox_url or not netbox_token:
+        raise ValueError("NETBOX_URL and NETBOX_TOKEN environment variables must be set")
+    
+    netbox = NetBoxRestClient(
+        url=netbox_url,
+        token=netbox_token,
+        verify_ssl=verify_ssl,
+        branch=DEFAULT_BRANCH
+    )
+    
+    return netbox
+
+# Initialize the client when the module is loaded
+try:
+    netbox = init_client()
+except Exception as e:
+    print(f"Error initializing NetBox client: {e}")
 
 @mcp.tool()
 def get_objects(object_type: str, filters: dict):
@@ -527,15 +558,105 @@ def bulk_delete_objects(object_type: str, id_list: list):
     except Exception as e:
         raise ValueError(f"Failed to bulk delete {object_type} objects: {str(e)}") from e
 
+# Branch management tools
+@mcp.tool()
+def get_branches():
+    """
+    Get all branches available in NetBox.
+    
+    Returns:
+        List of branch objects containing id, name, schema_id, and other details
+    """
+    return netbox.get_branches()
+
+@mcp.tool()
+def get_branch(id: int):
+    """
+    Get detailed information about a specific branch by its ID.
+    
+    Args:
+        id: The numeric ID of the branch
+        
+    Returns:
+        Complete branch details including the schema ID needed for API requests
+    """
+    return netbox.get_branch(id)
+
+@mcp.tool()
+def create_branch(name: str, description: str = "", base_branch: Optional[str] = None):
+    """
+    Create a new branch in NetBox.
+    
+    Args:
+        name: Name for the new branch
+        description: Optional description of the branch purpose
+        base_branch: Optional schema ID of a branch to base this one on
+        
+    Returns:
+        The created branch object including its generated schema ID
+    """
+    return netbox.create_branch(name, description, base_branch)
+
+@mcp.tool()
+def update_branch(id: int, data: dict):
+    """
+    Update a branch in NetBox.
+    
+    Args:
+        id: The numeric ID of the branch to update
+        data: Dictionary containing the branch properties to update
+        
+    Returns:
+        The updated branch object
+    """
+    return netbox.update_branch(id, data)
+
+@mcp.tool()
+def delete_branch(id: int):
+    """
+    Delete a branch from NetBox.
+    
+    Args:
+        id: The numeric ID of the branch to delete
+        
+    Returns:
+        True if deletion was successful
+    """
+    return netbox.delete_branch(id)
+
+@mcp.tool()
+def merge_branch(id: int, target_branch: Optional[str] = None):
+    """
+    Merge a branch into either the main branch or another branch.
+    
+    Args:
+        id: ID of the branch to merge
+        target_branch: Optional schema ID of the target branch (defaults to main branch)
+        
+    Returns:
+        Result of the merge operation
+    """
+    return netbox.merge_branch(id, target_branch)
+
+@mcp.tool()
+def set_active_branch(schema_id: Optional[str] = None):
+    """
+    Set the active branch to use for subsequent API calls.
+    This affects all subsequent calls to NetBox tools until changed.
+    
+    Args:
+        schema_id: Schema ID of the branch to use, or None to use the main branch
+        
+    Returns:
+        Dictionary with the current branch status
+    """
+    netbox.set_branch(schema_id)
+    return {
+        "active_branch": schema_id if schema_id else "main",
+        "message": f"Active branch set to {'main' if not schema_id else schema_id}"
+    }
+
+# Application entry point
 if __name__ == "__main__":
-    # Load NetBox configuration from environment variables
-    netbox_url = os.getenv("NETBOX_URL")
-    netbox_token = os.getenv("NETBOX_TOKEN")
-    
-    if not netbox_url or not netbox_token:
-        raise ValueError("NETBOX_URL and NETBOX_TOKEN environment variables must be set")
-    
-    # Initialize NetBox client
-    netbox = NetBoxRestClient(url=netbox_url, token=netbox_token)
-    
+    # Start the MCP server
     mcp.run(transport="stdio")

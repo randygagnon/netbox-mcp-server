@@ -328,3 +328,152 @@ When using write operations, keep these security considerations in mind:
 6. **Bulk Operations**: Use bulk operations for better performance when working with multiple objects, but be cautious about the size of the batch to avoid timeouts.
 
 7. **Testing**: Test write operations in a non-production environment before using them in production.
+
+### Branch Operations
+
+#### get_branches
+
+Get all branches available in NetBox.
+
+Example:
+
+```python
+get_branches()
+```
+
+#### get_branch
+
+Get detailed information about a specific branch by its ID.
+
+Arguments:
+
+- `id`: The numeric ID of the branch
+
+Example:
+
+```python
+get_branch(1)
+```
+
+#### create_branch
+
+Create a new branch in NetBox.
+
+Arguments:
+
+- `name`: Name for the new branch
+- `description`: Optional description of the branch purpose
+- `base_branch`: Optional schema ID of a branch to base this one on
+
+Example:
+
+```python
+create_branch("network-redesign", "Planned network redesign for Q3")
+```
+
+#### update_branch
+
+Update a branch in NetBox.
+
+Arguments:
+
+- `id`: The numeric ID of the branch to update
+- `data`: Dictionary containing the branch properties to update
+
+Example:
+
+```python
+update_branch(1, {
+    "name": "updated-branch-name",
+    "description": "Updated description"
+})
+```
+
+#### delete_branch
+
+Delete a branch from NetBox.
+
+Arguments:
+
+- `id`: The numeric ID of the branch to delete
+
+Example:
+
+```python
+delete_branch(1)
+```
+
+#### merge_branch
+
+Merge a branch into either the main branch or another branch.
+
+Arguments:
+
+- `id`: ID of the branch to merge
+- `target_branch`: Optional schema ID of the target branch (defaults to main branch)
+
+Example:
+
+```python
+# Merge branch 1 into the main branch
+merge_branch(1)
+
+# Merge branch 1 into another branch
+merge_branch(1, "target_branch_schema_id")
+```
+
+#### set_active_branch
+
+Set the active branch to use for subsequent API calls.
+This affects all subsequent calls to NetBox tools until changed.
+
+Arguments:
+
+- `schema_id`: Schema ID of the branch to use, or None to use the main branch
+
+Example:
+
+```python
+# Set a specific branch as active
+set_active_branch("abc123de")
+
+# Switch back to the main branch
+set_active_branch(None)
+```
+
+## Advanced Usage with Branching
+
+The branching feature allows you to make changes in an isolated context before applying them to your production data. Here's a typical workflow:
+
+```python
+# Create a new branch for planned changes
+branch = create_branch("planned-network-changes", "Network redesign phase 1")
+schema_id = branch["schema_id"]
+
+# Set the branch as active
+set_active_branch(schema_id)
+
+# Make changes in the branch context
+new_device = create_object("devices", {
+    "name": "new-core-switch",
+    "device_type": 5,
+    "device_role": 2,
+    "site": 1,
+    "status": "planned"
+})
+
+# Review the changes (all devices in the branch)
+devices_in_branch = get_objects("devices", {})
+
+# When satisfied, merge the branch back to main
+merge_branch(branch["id"])
+
+# Switch back to the main branch
+set_active_branch(None)
+```
+
+This workflow is particularly useful for:
+1. Testing configuration changes without affecting production
+2. Collaborating on changes with team members
+3. Planning and reviewing large network changes
+4. Providing an approval process for infrastructure modifications

@@ -147,7 +147,7 @@ class NetBoxRestClient(NetBoxClientBase):
 # })
 # print(f"Created site: {new_site.get('name')} (ID: {new_site.get('id')})")
 
-    def __init__(self, url: str, token: str, verify_ssl: bool = True):
+    def __init__(self, url: str, token: str, verify_ssl: bool = True, branch: Optional[str] = None):
         """
         Initialize the REST API client.
         
@@ -155,17 +155,45 @@ class NetBoxRestClient(NetBoxClientBase):
             url: The base URL of the NetBox instance (e.g., 'https://netbox.example.com')
             token: API token for authentication
             verify_ssl: Whether to verify SSL certificates
+            branch: Optional schema ID of the branch to use for all operations
         """
         self.base_url = url.rstrip('/')
         self.api_url = f"{self.base_url}/api"
         self.token = token
         self.verify_ssl = verify_ssl
+        self.branch = branch
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'Token {token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         })
+        
+        # Add branch header if specified
+        if self.branch:
+            self.session.headers.update({
+                'X-NetBox-Branch': self.branch
+            })
+    
+    def set_branch(self, branch: str) -> None:
+        """
+        Set or change the active branch for subsequent API calls.
+        
+        Args:
+            branch: Schema ID of the branch to use
+        """
+        self.branch = branch
+        if branch:
+            self.session.headers.update({
+                'X-NetBox-Branch': branch
+            })
+        elif 'X-NetBox-Branch' in self.session.headers:
+            # Remove branch header if branch is None
+            del self.session.headers['X-NetBox-Branch']
+    
+    def clear_branch(self) -> None:
+        """Remove the active branch (use the main/default branch)."""
+        self.set_branch(None)
     
     def _build_url(self, endpoint: str, id: Optional[int] = None) -> str:
         """Build the full URL for an API request."""
@@ -305,12 +333,168 @@ class NetBoxRestClient(NetBoxClientBase):
             
         Returns:
             True if deletion was successful, False otherwise
+        
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        url = f"{self._build_url(endpoint)}bulk/delete/"
+        data = {"id": ids}
+        response = self.session.post(url, json=data, verify=self.verify_ssl)
+        response.raise_for_status()
+        return True
+    
+    # Branch-specific methods
+    
+    def get_branches(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all branches from NetBox.
+        
+        Returns:
+            List of branch objects
+        
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        return self.get("extras/branches")
+    
+    def get_branch(self, id: int) -> Dict[str, Any]:
+        """
+        Retrieve a specific branch by ID.
+        
+        Args:
+            id: Branch ID
+            
+        Returns:
+            Branch object
             
         Raises:
             requests.HTTPError: If the request fails
         """
-        url = f"{self._build_url(endpoint)}bulk/"
-        data = [{"id": id} for id in ids]
-        response = self.session.delete(url, json=data, verify=self.verify_ssl)
-        response.raise_for_status()
-        return response.status_code == 204
+        return self.get("extras/branches", id=id)
+    
+    def create_branch(self, name: str, description: str = "", base_branch: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new branch in NetBox.
+        
+        Args:
+            name: Name of the branch
+            description: Optional description
+            base_branch: Optional schema ID of a branch to base this one on
+            
+        Returns:
+            The created branch object
+            
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        data = {
+            "name": name,
+            "description": description,
+        }
+        
+        # If base_branch is specified, include it
+        if base_branch:
+            data["base_branch"] = base_branch
+            
+        # X-NetBox-Branch header is NOT used when creating a branch
+        # Temporarily clear the header if it's set
+        current_branch = self.branch
+        if current_branch:
+            self.clear_branch()
+            
+        try:
+            result = self.create("extras/branches", data)
+            return result
+        finally:
+            # Restore the branch if it was set
+            if current_branch:
+                self.set_branch(current_branch)
+    
+    def update_branch(self, id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update a branch in NetBox.
+        
+        Args:
+            id: Branch ID
+            data: Branch data to update
+            
+        Returns:
+            The updated branch object
+            
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        # X-NetBox-Branch header is NOT used when updating a branch
+        # Temporarily clear the header if it's set
+        current_branch = self.branch
+        if current_branch:
+            self.clear_branch()
+            
+        try:
+            result = self.update("extras/branches", id, data)
+            return result
+        finally:
+            # Restore the branch if it was set
+            if current_branch:
+                self.set_branch(current_branch)
+    
+    def delete_branch(self, id: int) -> bool:
+        """
+        Delete a branch from NetBox.
+        
+        Args:
+            id: Branch ID
+            
+        Returns:
+            True if deletion was successful
+            
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        # X-NetBox-Branch header is NOT used when deleting a branch
+        # Temporarily clear the header if it's set
+        current_branch = self.branch
+        if current_branch:
+            self.clear_branch()
+            
+        try:
+            result = self.delete("extras/branches", id)
+            return result
+        finally:
+            # Restore the branch if it was set
+            if current_branch:
+                self.set_branch(current_branch)
+    
+    def merge_branch(self, id: int, target_branch: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Merge a branch into either the main branch or another branch.
+        
+        Args:
+            id: ID of the branch to merge
+            target_branch: Optional schema ID of the target branch (defaults to main branch)
+            
+        Returns:
+            Result of the merge operation
+            
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        url = self._build_url(f"extras/branches/{id}/merge")
+        data = {}
+        if target_branch:
+            data["target_branch"] = target_branch
+        
+        # X-NetBox-Branch header is NOT used when merging a branch
+        # Temporarily clear the header if it's set
+        current_branch = self.branch
+        if current_branch:
+            self.clear_branch()
+            
+        try:
+            response = self.session.post(url, json=data, verify=self.verify_ssl)
+            response.raise_for_status()
+            return response.json()
+        finally:
+            # Restore the branch if it was set
+            if current_branch:
+                self.set_branch(current_branch)
