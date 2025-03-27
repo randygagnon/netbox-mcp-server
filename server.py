@@ -1,6 +1,8 @@
 from mcp.server.fastmcp import FastMCP
 from netbox_client import NetBoxRestClient
 import os
+import requests
+import json
 
 # Mapping of simple object names to API endpoints
 NETBOX_OBJECT_TYPES = {
@@ -186,10 +188,10 @@ def get_objects(object_type: str, filters: dict):
     if object_type not in NETBOX_OBJECT_TYPES:
         valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
         raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
-        
+
     # Get API endpoint from mapping
     endpoint = NETBOX_OBJECT_TYPES[object_type]
-        
+
     # Make API call
     return netbox.get(endpoint, params=filters)
 
@@ -223,11 +225,307 @@ def get_object_by_id(object_type: str, object_id: int):
     if object_type not in NETBOX_OBJECT_TYPES:
         valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
         raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
-        
+    
     # Get API endpoint from mapping
     endpoint = f"{NETBOX_OBJECT_TYPES[object_type]}/{object_id}"
     
     return netbox.get(endpoint)
+
+@mcp.tool()
+def create_object(object_type: str, data: dict):
+    """
+    Create a new object in NetBox.
+    
+    Args:
+        object_type: String representing the NetBox object type (e.g. "devices", "ip-addresses")
+        data: Dictionary containing the object properties to create
+    
+    Returns:
+        The created object details
+    
+    Examples:
+        Creating a new device:
+        ```
+        {
+            "name": "new-device",
+            "device_type": 1,
+            "device_role": 1,
+            "site": 1,
+            "status": "active"
+        }
+        ```
+        
+        Creating a new IP address:
+        ```
+        {
+            "address": "192.168.100.1/24",
+            "status": "active",
+            "description": "Example IP"
+        }
+        ```
+    """
+    # Validate object_type exists in mapping
+    if object_type not in NETBOX_OBJECT_TYPES:
+        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
+    
+    # Get API endpoint from mapping
+    endpoint = NETBOX_OBJECT_TYPES[object_type]
+    
+    # Create the object
+    try:
+        return netbox.create(endpoint, data)
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_msg = f"Error: {error_details}"
+            except (ValueError, json.JSONDecodeError):
+                pass
+        raise ValueError(f"Failed to create {object_type}: {error_msg}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to create {object_type}: {str(e)}") from e
+
+@mcp.tool()
+def update_object(object_type: str, object_id: int, data: dict):
+    """
+    Update an existing object in NetBox.
+    
+    Args:
+        object_type: String representing the NetBox object type (e.g. "devices", "ip-addresses")
+        object_id: The numeric ID of the object to update
+        data: Dictionary containing the object properties to update
+    
+    Returns:
+        The updated object details
+    
+    Examples:
+        Updating a device:
+        ```
+        {
+            "name": "updated-device-name",
+            "status": "planned"
+        }
+        ```
+        
+        Updating an IP address:
+        ```
+        {
+            "description": "Updated description",
+            "status": "reserved"
+        }
+        ```
+    """
+    # Validate object_type exists in mapping
+    if object_type not in NETBOX_OBJECT_TYPES:
+        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
+    
+    # Get API endpoint from mapping
+    endpoint = NETBOX_OBJECT_TYPES[object_type]
+    
+    # Update the object
+    try:
+        return netbox.update(endpoint, object_id, data)
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_msg = f"Error: {error_details}"
+            except (ValueError, json.JSONDecodeError):
+                pass
+        raise ValueError(f"Failed to update {object_type} with ID {object_id}: {error_msg}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to update {object_type} with ID {object_id}: {str(e)}") from e
+
+@mcp.tool()
+def delete_object(object_type: str, object_id: int):
+    """
+    Delete an object from NetBox.
+    
+    Args:
+        object_type: String representing the NetBox object type (e.g. "devices", "ip-addresses")
+        object_id: The numeric ID of the object to delete
+    
+    Returns:
+        True if deletion was successful, False otherwise
+    """
+    # Validate object_type exists in mapping
+    if object_type not in NETBOX_OBJECT_TYPES:
+        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
+    
+    # Get API endpoint from mapping
+    endpoint = NETBOX_OBJECT_TYPES[object_type]
+    
+    # Delete the object
+    try:
+        result = netbox.delete(endpoint, object_id)
+        return result
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_msg = f"Error: {error_details}"
+            except (ValueError, json.JSONDecodeError):
+                pass
+        raise ValueError(f"Failed to delete {object_type} with ID {object_id}: {error_msg}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to delete {object_type} with ID {object_id}: {str(e)}") from e
+
+@mcp.tool()
+def bulk_create_objects(object_type: str, data_list: list):
+    """
+    Create multiple objects in NetBox in a single API call.
+    
+    Args:
+        object_type: String representing the NetBox object type (e.g. "devices", "ip-addresses")
+        data_list: List of dictionaries, each containing the properties for one object to create
+    
+    Returns:
+        List of created objects
+    
+    Examples:
+        Creating multiple IP addresses:
+        ```
+        [
+            {
+                "address": "192.168.100.1/24",
+                "status": "active",
+                "description": "Example IP 1"
+            },
+            {
+                "address": "192.168.100.2/24",
+                "status": "active",
+                "description": "Example IP 2"
+            }
+        ]
+        ```
+    """
+    # Validate object_type exists in mapping
+    if object_type not in NETBOX_OBJECT_TYPES:
+        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
+    
+    # Get API endpoint from mapping
+    endpoint = NETBOX_OBJECT_TYPES[object_type]
+    
+    # Create the objects
+    try:
+        return netbox.bulk_create(endpoint, data_list)
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_msg = f"Error: {error_details}"
+            except (ValueError, json.JSONDecodeError):
+                pass
+        raise ValueError(f"Failed to bulk create {object_type} objects: {error_msg}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to bulk create {object_type} objects: {str(e)}") from e
+
+@mcp.tool()
+def bulk_update_objects(object_type: str, data_list: list):
+    """
+    Update multiple objects in NetBox in a single API call.
+    
+    Args:
+        object_type: String representing the NetBox object type (e.g. "devices", "ip-addresses")
+        data_list: List of dictionaries, each containing the ID and properties to update
+    
+    Returns:
+        List of updated objects
+    
+    Note:
+        Each object dictionary in the data_list MUST contain an 'id' field.
+    
+    Examples:
+        Updating multiple devices:
+        ```
+        [
+            {
+                "id": 1,
+                "status": "planned"
+            },
+            {
+                "id": 2,
+                "status": "active"
+            }
+        ]
+        ```
+    """
+    # Validate object_type exists in mapping
+    if object_type not in NETBOX_OBJECT_TYPES:
+        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
+    
+    # Validate each item has an ID
+    for i, item in enumerate(data_list):
+        if 'id' not in item:
+            raise ValueError(f"Item at index {i} is missing required 'id' field")
+    
+    # Get API endpoint from mapping
+    endpoint = NETBOX_OBJECT_TYPES[object_type]
+    
+    # Update the objects
+    try:
+        return netbox.bulk_update(endpoint, data_list)
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_msg = f"Error: {error_details}"
+            except (ValueError, json.JSONDecodeError):
+                pass
+        raise ValueError(f"Failed to bulk update {object_type} objects: {error_msg}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to bulk update {object_type} objects: {str(e)}") from e
+
+@mcp.tool()
+def bulk_delete_objects(object_type: str, id_list: list):
+    """
+    Delete multiple objects from NetBox in a single API call.
+    
+    Args:
+        object_type: String representing the NetBox object type (e.g. "devices", "ip-addresses")
+        id_list: List of IDs of objects to delete
+    
+    Returns:
+        True if deletion was successful, False otherwise
+    
+    Examples:
+        Deleting multiple IP addresses:
+        ```
+        [1, 2, 3]
+        ```
+    """
+    # Validate object_type exists in mapping
+    if object_type not in NETBOX_OBJECT_TYPES:
+        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
+    
+    # Get API endpoint from mapping
+    endpoint = NETBOX_OBJECT_TYPES[object_type]
+    
+    # Delete the objects
+    try:
+        return netbox.bulk_delete(endpoint, id_list)
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_details = e.response.json()
+                error_msg = f"Error: {error_details}"
+            except (ValueError, json.JSONDecodeError):
+                pass
+        raise ValueError(f"Failed to bulk delete {object_type} objects: {error_msg}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to bulk delete {object_type} objects: {str(e)}") from e
 
 if __name__ == "__main__":
     # Load NetBox configuration from environment variables
