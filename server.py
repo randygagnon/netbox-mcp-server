@@ -194,20 +194,6 @@ def get_objects(object_type: str, filters: dict):
     return netbox.get(endpoint, params=filters)
 
 @mcp.tool()
-def search_netbox(query: str, limit: int = 10):
-    """
-    Perform a global search across NetBox objects.
-    
-    Args:
-        query: Search string to look for across NetBox objects
-        limit: Maximum number of results to return (default: 10)
-    
-    Returns:
-        List of matching objects across different NetBox models
-    """
-    return netbox.get("search", params={"q": query, "limit": limit})
-
-@mcp.tool()
 def get_object_by_id(object_type: str, object_id: int):
     """
     Get detailed information about a specific NetBox object by its ID.
@@ -228,6 +214,55 @@ def get_object_by_id(object_type: str, object_id: int):
     endpoint = f"{NETBOX_OBJECT_TYPES[object_type]}/{object_id}"
     
     return netbox.get(endpoint)
+
+@mcp.tool()
+def get_changelogs(filters: dict):
+    """
+    Get object change records (changelogs) from NetBox based on filters.
+    
+    Args:
+        filters: dict of filters to apply to the API call based on the NetBox API filtering options
+    
+    Returns:
+        List of changelog objects matching the specified filters
+    
+    Filtering options include:
+    - user_id: Filter by user ID who made the change
+    - user: Filter by username who made the change
+    - changed_object_type_id: Filter by ContentType ID of the changed object
+    - changed_object_id: Filter by ID of the changed object
+    - object_repr: Filter by object representation (usually contains object name)
+    - action: Filter by action type (created, updated, deleted)
+    - time_before: Filter for changes made before a given time (ISO 8601 format)
+    - time_after: Filter for changes made after a given time (ISO 8601 format)
+    - q: Search term to filter by object representation
+
+    Example:
+    To find all changes made to a specific device with ID 123:
+    {"changed_object_type_id": "dcim.device", "changed_object_id": 123}
+    
+    To find all deletions in the last 24 hours:
+    {"action": "delete", "time_after": "2023-01-01T00:00:00Z"}
+    
+    Each changelog entry contains:
+    - id: The unique identifier of the changelog entry
+    - user: The user who made the change
+    - user_name: The username of the user who made the change
+    - request_id: The unique identifier of the request that made the change
+    - action: The type of action performed (created, updated, deleted)
+    - changed_object_type: The type of object that was changed
+    - changed_object_id: The ID of the object that was changed
+    - object_repr: String representation of the changed object
+    - object_data: The object's data after the change (null for deletions)
+    - object_data_v2: Enhanced data representation
+    - prechange_data: The object's data before the change (null for creations)
+    - postchange_data: The object's data after the change (null for deletions)
+    - time: The timestamp when the change was made
+    """
+    endpoint = "core/object-changes"
+    
+    # Make API call
+    return netbox.get(endpoint, params=filters)
 
 if __name__ == "__main__":
     # Load NetBox configuration from environment variables
