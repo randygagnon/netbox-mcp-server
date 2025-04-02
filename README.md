@@ -7,8 +7,8 @@ This is a simple read-only [Model Context Protocol](https://modelcontextprotocol
 | Tool | Description |
 |------|-------------|
 | get_objects | Retrieves NetBox core objects based on their type and filters |
-| search_netbox | Performs a global search across NetBox objects |
 | get_object_by_id | Gets detailed information about a specific NetBox object by its ID |
+| get_changelogs | Retrieves change history records (audit trail) based on filters |
 
 > Note: the set of supported object types is explicitly defined and limited to the core NetBox objects for now, and won't work with object types from plugins.
 
@@ -51,6 +51,10 @@ This is a simple read-only [Model Context Protocol](https://modelcontextprotocol
 > Tell me about my IPAM utilization
 ...
 > What Cisco devices are in my network?
+...
+> Who made changes to the NYC site in the last week?
+...
+> Show me all configuration changes to the core router in the last month
 ```
 
 ## Development
