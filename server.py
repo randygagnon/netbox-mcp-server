@@ -83,7 +83,18 @@ NETBOX_OBJECT_TYPES = {
     # Wireless
     "wireless-lans": "wireless/wireless-lans",
     "wireless-lan-groups": "wireless/wireless-lan-groups",
-    "wireless-links": "wireless/wireless-links"
+    "wireless-links": "wireless/wireless-links",
+
+    # Extras
+    "config-contexts": "extras/config-contexts",
+    "custom-fields": "extras/custom-fields",
+    "export-templates": "extras/export-templates",
+    "image-attachments": "extras/image-attachments",
+    "jobs": "extras/jobs",
+    "saved-filters": "extras/saved-filters",
+    "scripts": "extras/scripts",
+    "tags": "extras/tags",
+    "webhooks": "extras/webhooks",
 }
 
 mcp = FastMCP("NetBox", log_level="DEBUG")
