@@ -90,7 +90,7 @@ mcp = FastMCP("NetBox", log_level="DEBUG")
 netbox = None
 
 @mcp.tool()
-def get_objects(object_type: str, filters: dict):
+def netbox_get_objects(object_type: str, filters: dict):
     """
     Get objects from NetBox based on their type and filters
     Args:
@@ -194,7 +194,7 @@ def get_objects(object_type: str, filters: dict):
     return netbox.get(endpoint, params=filters)
 
 @mcp.tool()
-def get_object_by_id(object_type: str, object_id: int):
+def netbox_get_object_by_id(object_type: str, object_id: int):
     """
     Get detailed information about a specific NetBox object by its ID.
     
@@ -216,7 +216,7 @@ def get_object_by_id(object_type: str, object_id: int):
     return netbox.get(endpoint)
 
 @mcp.tool()
-def get_changelogs(filters: dict):
+def netbox_get_changelogs(filters: dict):
     """
     Get object change records (changelogs) from NetBox based on filters.
     
